@@ -1,0 +1,6 @@
+__pycache__/
+.cache/
+*.pkl
+*.index
+multimodal_research_rag_assistant.zip
+.DS_Store
