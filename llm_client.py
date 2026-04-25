@@ -19,7 +19,14 @@ class LLMClient:
             }
             res = requests.post(url, json=payload)
             return res.json().get("response", "")
-        return "API Keys missing. Choose Ollama."
+        elif self.provider == "Gemini":
+            if not self.api_key:
+                return "Gemini key missing."
+            import google.generativeai as genai
+            genai.configure(api_key=self.api_key)
+            model = genai.GenerativeModel(self.model_name)
+            res = model.generate_content(prompt)
+            return res.text
 
     def generate_rag_answer(self, query, contexts):
         context_str = ""
