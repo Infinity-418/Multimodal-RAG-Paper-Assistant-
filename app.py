@@ -16,8 +16,8 @@ model_name = st.sidebar.text_input("Model Name", value="llama3")
 
 llm_client = LLMClient(provider=provider, api_key=api_key, model_name=model_name)
 
-# Three Tabs (added figures explorer)
-tab_upload, tab_chat, tab_figures = st.tabs(["Upload & Library", "Chat Q&A", "Figures Explorer"])
+# Four Tabs (added comparison)
+tab_upload, tab_chat, tab_figures, tab_compare = st.tabs(["Upload & Library", "Chat Q&A", "Figures Explorer", "Paper Comparison"])
 
 with tab_upload:
     uploaded = st.file_uploader("Upload Paper", type=["pdf"])
@@ -43,3 +43,14 @@ with tab_figures:
         if imgs:
             for img in imgs:
                 st.image(img["path"], caption=img["caption"])
+
+with tab_compare:
+    documents = st.session_state.rag_engine.get_all_documents()
+    if len(documents) >= 2:
+        p1 = st.selectbox("Paper A", documents, index=0)
+        p2 = st.selectbox("Paper B", documents, index=1)
+        if st.button("Generate Comparison"):
+            doc1_chunks = [c for c in st.session_state.rag_engine.text_chunks if c["doc_name"] == p1]
+            doc2_chunks = [c for c in st.session_state.rag_engine.text_chunks if c["doc_name"] == p2]
+            res = llm_client.generate_comparison(p1, doc1_chunks, p2, doc2_chunks)
+            st.markdown(res)
