@@ -91,12 +91,3 @@ streamlit run app.py
    - **Ollama**: Ensure Ollama is running (`ollama serve`). Input your model name (e.g., `llama3` for text or `llava` for vision-language tasks).
 
 ---
-
-## 📝 Add This to Your Resume
-
-Include these high-impact bullet points on your AI/ML Resume to showcase your practical engineering capabilities:
-
-* **Built a multimodal Retrieval-Augmented Generation (RAG) system** for scientific literature analysis using PyMuPDF, FAISS vector search, and open-source vision-language models.
-* **Implemented dual-semantic indexing (Text + Figures)** using SentenceTransformers and CLIP (`ViT-B-32`), achieving low-latency retrieval of text excerpts and architecture diagrams from research papers.
-* **Developed citation-grounded question-answering pipelines** and side-by-side paper comparison matrices, leveraging Google Gemini and OpenAI APIs to produce summaries grounded in specific source page numbers.
-* **Designed and deployed a responsive Streamlit dashboard** containing multi-tab workspaces for document library management, interactive RAG Q&A, diagram galleries, and comparative analysis report generation.
