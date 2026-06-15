@@ -127,6 +127,9 @@ if "rag_engine" not in st.session_state:
 if "chat_history" not in st.session_state:
     st.session_state.chat_history = []
 
+if "summaries" not in st.session_state:
+    st.session_state.summaries = {}
+
 # Directory to store uploaded PDFs physically
 UPLOAD_DIR = "uploaded_papers"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
@@ -255,7 +258,7 @@ with tab_ingest:
             doc_imgs = [img for img in st.session_state.rag_engine.images_meta if img["doc_name"] == doc]
             pages_count = max(c["page"] for c in doc_chunks) if doc_chunks else 0
             
-            col_info, col_del = st.columns([6, 1])
+            col_info, col_sum, col_del = st.columns([5, 1.2, 1])
             
             with col_info:
                 st.markdown(f"""
@@ -269,6 +272,21 @@ with tab_ingest:
                 </div>
                 """, unsafe_allow_html=True)
                 
+            with col_sum:
+                st.write("")  # Padding
+                st.write("")
+                if st.button("📝 Summarize", key=f"sum_{doc}", use_container_width=True):
+                    if not llm_client:
+                        st.error("Please configure API credentials in the sidebar.")
+                    else:
+                        with st.spinner(f"Generating summary for '{doc}'..."):
+                            try:
+                                summary_text = llm_client.generate_summary(doc, doc_chunks)
+                                st.session_state.summaries[doc] = summary_text
+                                st.rerun()
+                            except Exception as e:
+                                st.error(f"Error generating summary: {e}")
+
             with col_del:
                 st.write("")  # Padding
                 st.write("")
@@ -278,8 +296,16 @@ with tab_ingest:
                     phys_path = os.path.join(UPLOAD_DIR, doc)
                     if os.path.exists(phys_path):
                         os.remove(phys_path)
+                    # Clear summary if exists
+                    if doc in st.session_state.summaries:
+                        del st.session_state.summaries[doc]
                     st.success(f"Removed '{doc}' from vector index.")
                     st.rerun()
+            
+            # Render summary card if exists
+            if doc in st.session_state.summaries:
+                with st.expander(f"📝 Executive Summary for '{doc}'", expanded=True):
+                    st.markdown(st.session_state.summaries[doc])
 
 
 # ----------------- TAB 2: PAPER CHAT (Q&A) -----------------
@@ -417,7 +443,7 @@ with tab_chat:
                                     📝 <i>Caption: {img['caption']}</i>
                                     """, unsafe_allow_html=True)
                     
-                    st.rerun()
+                    # Removed redundant st.rerun() to avoid chat bubble duplications
                 except Exception as e:
                     st.error(f"Error generating response: {e}")
 

@@ -124,8 +124,13 @@ class LLMClient:
                 }
             ]
             
+            # Ensure the selected model supports vision, fallback to gpt-4o-mini if not a standard vision-capable OpenAI model
+            model_to_use = self.model_name
+            if model_to_use not in ["gpt-4o", "gpt-4o-mini", "gpt-4-turbo"]:
+                model_to_use = "gpt-4o-mini"
+                
             response = client.chat.completions.create(
-                model="gpt-4o-mini",  # Override to ensure vision capability
+                model=model_to_use,
                 messages=messages,
                 max_tokens=600
             )
@@ -223,11 +228,39 @@ class LLMClient:
         prompt = f"Paper Title: {doc_name}\n\nPaper Content:\n{context_str}\n\nGenerate Summary:"
         return self.generate_text(prompt, system_instruction=system_instruction)
 
+    def _get_representative_chunks(self, chunks, k=8):
+        """Selects a representative sample of chunks from the start, middle, and end of the document."""
+        if len(chunks) <= k:
+            return chunks
+        
+        start_count = k // 2
+        end_count = k - start_count - 2
+        mid_count = 2
+        
+        start_chunks = chunks[:start_count]
+        end_chunks = chunks[-end_count:]
+        
+        # Get middle chunks evenly spaced
+        mid_chunks = []
+        if len(chunks) > k:
+            step = (len(chunks) - start_count - end_count) // (mid_count + 1)
+            for i in range(1, mid_count + 1):
+                idx = start_count + (i * step)
+                if idx < len(chunks) - end_count:
+                    mid_chunks.append(chunks[idx])
+                    
+        # Combine and sort by page number
+        representative = list(set(start_chunks + mid_chunks + end_chunks))
+        representative.sort(key=lambda x: x["page"])
+        return representative
+
     def generate_comparison(self, doc1_name, doc1_chunks, doc2_name, doc2_chunks):
         """Generates a comparison between two papers."""
-        # Select first 6 chunks of both papers to extract background/methodology
-        d1_context = "\n\n".join([f"[Page {c['page']}]: {c['text']}" for c in doc1_chunks[:6]])
-        d2_context = "\n\n".join([f"[Page {c['page']}]: {c['text']}" for c in doc2_chunks[:6]])
+        # Get representative chunks (start, middle, and end) to capture abstract, results, and conclusion
+        d1_rep = self._get_representative_chunks(doc1_chunks, k=8)
+        d2_rep = self._get_representative_chunks(doc2_chunks, k=8)
+        d1_context = "\n\n".join([f"[Page {c['page']}]: {c['text']}" for c in d1_rep])
+        d2_context = "\n\n".join([f"[Page {c['page']}]: {c['text']}" for c in d2_rep])
         
         system_instruction = (
             "You are a research analyst comparing scientific literature. Based on the excerpts of the two papers, "
