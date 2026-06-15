@@ -17,6 +17,16 @@ class PDFProcessor:
         self.images_dir = os.path.join(cache_dir, "extracted_images")
         os.makedirs(self.images_dir, exist_ok=True)
 
+    def _chunk_long_paragraph(self, text, max_len=800, overlap=150):
+        """Splits an extremely long paragraph into overlapping sub-chunks."""
+        chunks = []
+        start = 0
+        while start < len(text):
+            end = start + max_len
+            chunks.append(text[start:end])
+            start += max_len - overlap
+        return chunks
+
     def extract_text_and_images(self, pdf_path):
         """
         Extracts text blocks and images from the given PDF.
@@ -44,17 +54,36 @@ class PDFProcessor:
                 para = para.strip()
                 if not para:
                     continue
-                # If adding this paragraph exceeds 1000 characters, save current chunk and start new one
-                if len(current_chunk) + len(para) > 1000 and current_chunk:
-                    chunks.append({
-                        "text": current_chunk.strip(),
-                        "page": page_num + 1,
-                        "doc_name": doc_name
-                    })
-                    # Implement overlapping: keep last 150 chars of previous chunk
-                    current_chunk = current_chunk[-150:] + " " + para
+                # If a single paragraph is too large (exceeds chunk size limit), split it into sub-chunks
+                if len(para) > 1000:
+                    # Flush current chunk first
+                    if current_chunk:
+                        chunks.append({
+                            "text": current_chunk.strip(),
+                            "page": page_num + 1,
+                            "doc_name": doc_name
+                        })
+                        current_chunk = ""
+                    # Split the long paragraph
+                    sub_paras = self._chunk_long_paragraph(para, max_len=800, overlap=150)
+                    for sub_p in sub_paras:
+                        chunks.append({
+                            "text": sub_p.strip(),
+                            "page": page_num + 1,
+                            "doc_name": doc_name
+                        })
                 else:
-                    current_chunk = (current_chunk + " " + para).strip()
+                    # If adding this paragraph exceeds 1000 characters, save current chunk and start new one
+                    if len(current_chunk) + len(para) > 1000 and current_chunk:
+                        chunks.append({
+                            "text": current_chunk.strip(),
+                            "page": page_num + 1,
+                            "doc_name": doc_name
+                        })
+                        # Implement overlapping: keep last 150 chars of previous chunk
+                        current_chunk = current_chunk[-150:] + " " + para
+                    else:
+                        current_chunk = (current_chunk + " " + para).strip()
             
             if current_chunk:
                 chunks.append({
@@ -239,10 +268,12 @@ class RAGEngine:
                 # Encode images using CLIP
                 new_img_embeddings = self.clip_model.encode(new_pil_images, show_progress_bar=False)
                 new_img_embeddings = np.array(new_img_embeddings).astype("float32")
+                # Normalize embeddings for cosine similarity (Inner Product)
+                faiss.normalize_L2(new_img_embeddings)
                 
                 if self.image_index is None:
                     dim_img = new_img_embeddings.shape[1]
-                    self.image_index = faiss.IndexFlatL2(dim_img)
+                    self.image_index = faiss.IndexFlatIP(dim_img) # Inner Product
                     
                 self.image_index.add(new_img_embeddings)
                 self.images_meta.extend(valid_images_meta)
@@ -298,6 +329,8 @@ class RAGEngine:
         # Encode query text using CLIP
         query_embedding = self.clip_model.encode([query])
         query_embedding = np.array(query_embedding).astype("float32")
+        # Normalize query vector for Cosine Similarity
+        faiss.normalize_L2(query_embedding)
         
         # Search index
         search_k = k * 5 if filter_doc else k
@@ -358,6 +391,14 @@ class RAGEngine:
             self.text_chunks = []
             self.text_index = None
             
+        # Delete physical image files of the removed document BEFORE updating images_meta
+        for img in self.images_meta:
+            if img["doc_name"] == doc_name:
+                try:
+                    os.remove(img["path"])
+                except:
+                    pass
+
         # Rebuild image index
         new_images_meta = [self.images_meta[i] for i in keep_image_indices]
         if new_images_meta:
@@ -366,18 +407,12 @@ class RAGEngine:
                 new_pil_images.append(Image.open(img["path"]))
             new_img_embeddings = self.clip_model.encode(new_pil_images, show_progress_bar=False)
             new_img_embeddings = np.array(new_img_embeddings).astype("float32")
+            # Normalize embeddings for Cosine Similarity
+            faiss.normalize_L2(new_img_embeddings)
             dim_img = new_img_embeddings.shape[1]
-            self.image_index = faiss.IndexFlatL2(dim_img)
+            self.image_index = faiss.IndexFlatIP(dim_img) # Inner Product
             self.image_index.add(new_img_embeddings)
             self.images_meta = new_images_meta
-            
-            # Delete physical image files of the removed document
-            for img in self.images_meta:
-                if img["doc_name"] == doc_name:
-                    try:
-                        os.remove(img["path"])
-                    except:
-                        pass
         else:
             self.images_meta = []
             self.image_index = None

@@ -371,9 +371,8 @@ with tab_chat:
                 
                 # Retrieve Relevant Figures (CLIP Multimodal Search)
                 matched_images = st.session_state.rag_engine.search_images(query, k=2, filter_doc=filter_doc_name)
-                # Filter images that are actually close in CLIP embedding (score threshold L2 distance is typically low, e.g. < 2.5)
-                # CLIP IndexFlatL2 distance: lower is better. We filter anything with dist > 1.8 for safety, or just show top 1
-                matched_images = [img for img in matched_images if img["score"] < 2.0]
+                # Filter images based on CLIP Cosine Similarity threshold (higher is better, >= 0.22 indicates high relevance)
+                matched_images = [img for img in matched_images if img["score"] > 0.22]
             
             # Generate Answer
             with st.spinner("Synthesizing answer with citations..."):
